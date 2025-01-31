@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
 
+const successSound = new Audio("/success.mp3"); // Correct answer sound
+const errorSound = new Audio("/error.mp3"); // Wrong answer sound
+
 const Main_page = () => {
   const [numberSet, setnumberSet] = useState([]);
   const [answer, setanswer] = useState("");
@@ -9,118 +12,158 @@ const Main_page = () => {
   const [WrongAns, setWrongAns] = useState([]);
   const [TrueAns, setTrueAns] = useState([]);
   const [Result, setResult] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(5);
+  const [answerStatus, setAnswerStatus] = useState(null); // "correct" or "wrong"
 
-  const generateRandomNumber = () => {
-    return Math.floor(Math.random() * 90) + 10;
-  };
+  const generateRandomNumber = () => Math.floor(Math.random() * 90) + 10;
 
   const NumberSetter = () => {
-    if (numberSet.length < 20) {
-      for (let i = 0; i < 20; i++) {
-        var num1 = generateRandomNumber();
-        var num2 = generateRandomNumber();
-        const sets = [];
-        sets.push(num1, num2);
-        setnumberSet((set) => [...set, sets]);
-      }
-    }
-    setMainVisible((prevState) => !prevState);
-    setBtnVisible((prevState) => !prevState);
+    const newNumbers = Array.from({ length: 20 }, () => [
+      generateRandomNumber(),
+      generateRandomNumber(),
+    ]);
+
+    setnumberSet(newNumbers);
+    setMainVisible(true);
+    setBtnVisible(false);
     setResult(0);
+    setindex(0);
+    setWrongAns([]);
+    setTrueAns([]);
+    setTimeLeft(5);
+    setAnswerStatus(null);
   };
 
   const handleNextClick = () => {
     if (numberSet[index]) {
-      const add = numberSet[index][0] + numberSet[index][1];
-      const index1 = numberSet[index][0];
-      const index2 = numberSet[index][1];
-      const index3 = parseInt(answer, 10);
-      if (index3 === add) {
-        setTrueAns((set) => [...set, [index1, index2, index3]]);
-        setResult((prevResult) => prevResult + 1);
-        console.log("true");
+      const [num1, num2] = numberSet[index];
+      const sum = num1 + num2;
+      const userAnswer = parseInt(answer, 10);
+
+      if (userAnswer === sum) {
+        setTrueAns((prev) => [...prev, [num1, num2, userAnswer]]);
+        setResult((prev) => prev + 1);
+        setAnswerStatus("correct");
+        successSound.play(); // Play correct sound
       } else {
-        setWrongAns((set) => [...set, [index1, index2, index3]]);
-        console.log("false");
+        setWrongAns((prev) => [...prev, [num1, num2, userAnswer]]);
+        setAnswerStatus("wrong");
+        errorSound.play(); // Play wrong sound
       }
 
-      setindex((prevIndex) => prevIndex + 1);
-      setanswer(""); // Reset answer after each question
-      // Reset the timer for the next question
+      setTimeout(() => {
+        setanswer(""); // Reset input
+        setindex((prev) => prev + 1);
+        setTimeLeft(5); // Reset timer
+        setAnswerStatus(null); // Reset status after delay
+      }, 500);
     }
   };
 
   useEffect(() => {
-    console.log("TrueAns:", TrueAns);
-    console.log("WrongAns:", WrongAns);
+    if (index < 20 && MainVisible) {
+      const timer = setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev === 1) {
+            handleNextClick();
+            return 5;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(timer);
+    }
+  }, [index, MainVisible]);
+
+  useEffect(() => {
     if (index >= 20) {
       setMainVisible(false);
       setBtnVisible(false);
     }
-  }, [TrueAns, WrongAns, index]);
+  }, [index]);
 
   return (
-    <div>
+    <div className="flex flex-col items-center p-6">
       {BtnVisible && (
         <button
-          className="bg-white hover:bg-gray-100 text-gray-800 font-bold py-2 px-6 border border-gray-400 rounded shadow"
+          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded shadow-lg"
           onClick={NumberSetter}
         >
           Start
         </button>
       )}
 
-      {MainVisible && (
-        <div>
-          <div className="flex flex-col text-2xl content-baseline ">
-            {numberSet[index] && (
-              <span className="">
-                {numberSet[index][0]} + {numberSet[index][1]}
-              </span>
-            )}
+      {MainVisible && numberSet[index] && (
+        <div className="flex flex-col items-center mt-6">
+          <span className="text-3xl font-bold">
+            {numberSet[index][0]} + {numberSet[index][1]}
+          </span>
 
-            <input
-              className="bg-white  border border-gray-400 rounded-2xl text-gray-600  w-36  my-3"
-              type="text"
-              value={answer}
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  handleNextClick();
-                }
-              }}
-              onChange={(e) => setanswer(e.target.value)}
-            />
+          <input
+            className={`bg-white border-2 text-gray-600 w-36 text-center mt-4 p-2 text-xl rounded-2xl transition-all ${
+              answerStatus === "correct" ? "border-green-500 bg-green-100" : ""
+            } ${answerStatus === "wrong" ? "border-red-500 bg-red-100" : ""}`}
+            type="number"
+            value={answer}
+            autoFocus
+            onChange={(e) => setanswer(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleNextClick()}
+          />
+
+          {/* Timer Indicator */}
+          <div className="w-full bg-gray-300 mt-4 rounded-full h-3">
+            <div
+              className="bg-red-500 h-3 rounded-full transition-all"
+              style={{ width: `${(timeLeft / 5) * 100}%` }}
+            ></div>
           </div>
+          <p className="text-sm mt-1">Time left: {timeLeft}s</p>
+
+          {/* Progress Indicator */}
+          <div className="w-full bg-gray-200 mt-4 rounded-full h-4">
+            <div
+              className="bg-green-500 h-4 rounded-full transition-all"
+              style={{ width: `${(index / 20) * 100}%` }}
+            ></div>
+          </div>
+          <p className="text-sm mt-1">{index}/20 completed</p>
         </div>
       )}
-      {(index === 20 || index > 20) && (
-        <div>
-          <div className="flex flex-row justify-evenly w-full">
-            <div className="px-14">
-              <h2>Wrong Answers:</h2>
-              <ul>
-                {WrongAns.map((item, index) => (
-                  <li key={index}>
-                    {item[0]} + {item[1]} = {item[2]}
+
+      {index === 20 && (
+        <div className="w-full text-center mt-6">
+          <h2 className="text-2xl font-bold">Results: {Result}/20</h2>
+
+          <div className="flex justify-around w-full mt-4">
+            <div>
+              <h3 className="text-lg font-semibold">Wrong Answers:</h3>
+              <ul className="text-red-600">
+                {WrongAns.map(([a, b, ans], i) => (
+                  <li key={i}>
+                    {a} + {b} ≠ {ans}
                   </li>
                 ))}
               </ul>
             </div>
-            <div className="px-14">
-              <h2>Right Answers:</h2>
-              <ul>
-                {TrueAns.map((item, index) => (
-                  <li key={index}>
-                    {item[0]} + {item[1]} = {item[2]}
+            <div>
+              <h3 className="text-lg font-semibold">Right Answers:</h3>
+              <ul className="text-green-600">
+                {TrueAns.map(([a, b, ans], i) => (
+                  <li key={i}>
+                    {a} + {b} = {ans}
                   </li>
                 ))}
               </ul>
             </div>
           </div>
-          <div className="py-8">
-            <h2>Results are :{Result}/20</h2>
-          </div>
+
+          <button
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 mt-6 rounded shadow-lg"
+            onClick={NumberSetter}
+          >
+            Restart
+          </button>
         </div>
       )}
     </div>
